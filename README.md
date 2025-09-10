@@ -10,9 +10,11 @@ brew tap sam-phinizy/beer-hall
 
 ## Available Formulae
 
-### git-stack
-Git stack management tool with interactive TUI
+| name | repo link | description |
+|---|---|---|
+| `git-stack` | [sam-phinizy/git-stack](https://github.com/sam-phinizy/git-stack) | Git stack management tool with interactive TUI |
 
+To install, run:
 ```bash
 brew install git-stack
 ```
