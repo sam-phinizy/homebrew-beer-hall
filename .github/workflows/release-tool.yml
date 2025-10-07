@@ -1,0 +1,44 @@
+name: Release Tool
+
+on:
+  push:
+    tags:
+      # Match tags like: tool-name/v1.0.0
+      - '*/v*.*.*'
+
+permissions:
+  contents: write  # Required for creating releases
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract tag information
+        id: tag_info
+        run: |
+          # Extract tag from GITHUB_REF (refs/tags/tool-name/v1.0.0)
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Creating release for tag: $TAG"
+
+      - name: Create GitHub Release with Dagger
+        uses: dagger/dagger-for-github@v8
+        with:
+          version: "latest"
+          module: github.com/sam-phinizy/homebrew-beer-hall/ci@main
+          args: release --tag "${{ steps.tag_info.outputs.tag }}" --source . --token env:GITHUB_TOKEN
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on success
+        if: success()
+        run: |
+          echo "✅ Release created successfully!"
+          echo "📝 Next steps:"
+          echo "   1. Update the formula in Formula/ with the new version and SHA256"
+          echo "   2. Commit and push the formula update"
+          echo ""
+          echo "The SHA256 hash has been included in the Dagger output above."

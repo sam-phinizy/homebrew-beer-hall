@@ -1,0 +1,8 @@
+{
+  "name": "release-tool",
+  "engineVersion": "v0.18.14",
+  "sdk": {
+    "source": "python"
+  },
+  "source": "src/release_tool"
+}

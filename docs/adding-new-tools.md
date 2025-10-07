@@ -31,6 +31,33 @@ Make sure the script has proper shebang and is executable:
 
 ### 2. Create a GitHub Release
 
+#### Option A: Automated (Recommended)
+
+Simply push a git tag and let CI handle everything:
+
+```bash
+# Commit your script first
+git add scripts/your-script.py
+git commit -m "Add your-script"
+git push
+
+# Create and push a tag
+git tag your-tool/v1.0.0
+git push origin your-tool/v1.0.0
+```
+
+The GitHub Actions workflow will automatically:
+- Create the GitHub release
+- Upload the script as an asset
+- Calculate and display the SHA256 hash
+- Generate release notes
+
+Check the Actions tab on GitHub to see the pipeline run and get the SHA256 hash.
+
+#### Option B: Manual
+
+If you prefer manual control:
+
 **Calculate SHA256 hash:**
 ```bash
 shasum -a 256 scripts/your-script.py
@@ -44,6 +71,15 @@ gh release create YOUR_TOOL/vX.Y.Z \
   --title "YOUR_TOOL vX.Y.Z" \
   --notes "Initial release of YOUR_TOOL" \
   scripts/your-script.py
+```
+
+**Or test locally with Dagger:**
+```bash
+cd ci
+dagger call release \
+  --tag "your-tool/v1.0.0" \
+  --source .. \
+  --token env:GITHUB_TOKEN
 ```
 
 ### 3. Create a Homebrew Formula
@@ -201,3 +237,56 @@ brew upgrade sam-phinizy/beer-hall/gh-pr2org
 - Ensure shebang is correct for uv
 - Check Python version requirement
 - Verify dependencies in PEP 723 header
+
+**Automated release fails:**
+- Verify tag format is exactly: `tool-name/vX.Y.Z`
+- Ensure script exists in `scripts/` directory
+- Check GitHub Actions logs for detailed error messages
+- See `ci/README.md` for more troubleshooting tips
+
+## CI/CD Pipeline
+
+The repository uses Dagger for automated releases. Here's how it works:
+
+### Architecture
+
+- **Dagger Module** (`ci/`): Python-based automation for releases
+- **GitHub Actions** (`.github/workflows/release-tool.yml`): Triggers on tag push
+- **Workflow**: Tag push → Parse tag → Find script → Calculate SHA256 → Create release
+
+### Benefits
+
+1. **Consistency**: Same SHA256 calculation every time
+2. **Automation**: No manual steps for releases
+3. **Transparency**: All actions visible in GitHub Actions logs
+4. **Testability**: Can test locally with Dagger CLI before pushing
+
+### Local Testing
+
+Before pushing a tag, test the release locally:
+
+```bash
+cd ci
+
+# Dry run to see what would happen
+dagger call create-release \
+  --tag "your-tool/v1.0.0" \
+  --source .. \
+  --token env:GITHUB_TOKEN \
+  --dry-run true
+
+# Test individual functions
+dagger call parse-tag --tag "your-tool/v1.0.0"
+dagger call find-script --source .. --tool-name "your-tool"
+```
+
+### Extending the Pipeline
+
+Want to add more automation? Edit `ci/src/release_tool/src/release_tool/main.py`:
+
+- Add formula auto-update
+- Generate changelogs from commits
+- Run validation tests before release
+- Send notifications
+
+See `ci/README.md` for detailed documentation on the Dagger module.

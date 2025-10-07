@@ -39,7 +39,23 @@ After installation, you can use:
 
 ## Adding New Tools
 
-See [docs/adding-new-tools.md](docs/adding-new-tools.md) for instructions on adding new scripts to this tap.
+This tap includes automated CI/CD for releasing new tools:
+
+1. Add your script to `scripts/`
+2. Push a tag like `tool-name/v1.0.0`
+3. GitHub Actions automatically creates the release
+4. Update the formula with the new version and SHA256 hash
+
+See [docs/adding-new-tools.md](docs/adding-new-tools.md) for detailed instructions.
+
+### CI/CD
+
+Releases are automated using [Dagger](https://dagger.io):
+- **Pipeline**: `ci/` contains a Dagger module for release automation
+- **Trigger**: Push tags matching `tool-name/v*.*.*`
+- **Process**: Automatic SHA256 calculation, release creation, and asset upload
+
+See [ci/README.md](ci/README.md) for CI/CD documentation.
 
 ## Issues
 
