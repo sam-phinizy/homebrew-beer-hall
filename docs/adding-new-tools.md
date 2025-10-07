@@ -31,7 +31,25 @@ Make sure the script has proper shebang and is executable:
 
 ### 2. Create a GitHub Release
 
-#### Option A: Automated (Recommended)
+#### Option A: Using mise (Easiest)
+
+If you have [mise](https://mise.jdx.dev) installed:
+
+```bash
+# One command does it all!
+mise run deploy your-tool 1.0.0
+```
+
+This automatically:
+- Validates the tag format
+- Checks if script exists
+- Ensures changes are committed
+- Creates and pushes the tag
+- Triggers GitHub Actions
+
+See [docs/mise-usage.md](mise-usage.md) for more mise tasks.
+
+#### Option B: Manual Tag Push (Automated CI)
 
 Simply push a git tag and let CI handle everything:
 
@@ -54,9 +72,9 @@ The GitHub Actions workflow will automatically:
 
 Check the Actions tab on GitHub to see the pipeline run and get the SHA256 hash.
 
-#### Option B: Manual
+#### Option C: Fully Manual
 
-If you prefer manual control:
+If you prefer complete manual control:
 
 **Calculate SHA256 hash:**
 ```bash
@@ -184,6 +202,27 @@ git push
 ```
 
 ## Updating an Existing Tool
+
+### Quick Update with mise
+
+```bash
+# 1. Update and commit your script
+vim scripts/gh-pr2org.py
+git add scripts/gh-pr2org.py
+git commit -m "Update gh-pr2org: fix bug"
+git push
+
+# 2. Deploy new version (creates tag and triggers CI)
+mise run deploy gh-pr2org 1.0.1
+
+# 3. Get SHA256 from GitHub Actions output, then update formula
+mise run update-formula gh-pr2org 1.0.1 <SHA256_FROM_ACTIONS>
+
+# 4. Test
+brew upgrade sam-phinizy/beer-hall/gh-pr2org
+```
+
+### Manual Update Process
 
 1. Update the script in `scripts/`
 2. Increment version in `Formula/your-tool.rb`

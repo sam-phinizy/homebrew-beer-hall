@@ -37,12 +37,31 @@ After installation, you can use:
 - `git-stack` - Interactive git stack management
 - `gh-pr2org <org-file>` - Sync GitHub PRs where you're tagged to an org-mode file
 
-## Adding New Tools
+## For Developers
+
+### Quick Release with mise
+
+This repo uses [mise](https://mise.jdx.dev) for task automation:
+
+```bash
+# Install mise
+brew install mise
+
+# Deploy a new version (creates tag and triggers CI)
+mise run deploy gh-pr2org 1.0.1
+
+# Update formula after release completes
+mise run update-formula gh-pr2org 1.0.1 <SHA256>
+```
+
+See [docs/mise-usage.md](docs/mise-usage.md) for all available tasks.
+
+### Adding New Tools
 
 This tap includes automated CI/CD for releasing new tools:
 
 1. Add your script to `scripts/`
-2. Push a tag like `tool-name/v1.0.0`
+2. Push a tag like `tool-name/v1.0.0` (or use `mise run deploy`)
 3. GitHub Actions automatically creates the release
 4. Update the formula with the new version and SHA256 hash
 

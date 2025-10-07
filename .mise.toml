@@ -1,0 +1,259 @@
+# mise configuration for beer-hall Homebrew tap
+# https://mise.jdx.dev
+
+[tools]
+python = "3.12"
+# Uncomment if you want mise to manage these tools:
+# "gh" = "latest"
+# "uv" = "latest"
+# "dagger" = "latest"
+
+[env]
+GITHUB_REPO = "sam-phinizy/homebrew-beer-hall"
+
+# Simple helper tasks
+[tasks.list-tools]
+description = "List all available tools in scripts/"
+run = "ls -1 scripts/ | sed 's/\\..*$//'"
+
+[tasks.validate-tag]
+description = "Validate a tag format (usage: mise run validate-tag tool-name/v1.0.0)"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+TAG="{{arg(name="tag")}}"
+if [[ ! "$TAG" =~ ^[a-z0-9-]+/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "❌ Invalid tag format: $TAG"
+  echo "Expected format: tool-name/vX.Y.Z (e.g., gh-pr2org/v1.0.0)"
+  exit 1
+fi
+echo "✅ Tag format valid: $TAG"
+'''
+
+# Release testing tasks
+[tasks.test-release]
+description = "Test a release locally with Dagger dry-run"
+dir = "ci"
+env = { DAGGER_LOG = "info" }
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+TAG="{{arg(name="tag")}}"
+echo "🧪 Testing release for tag: $TAG"
+dagger call create-release \
+  --tag "$TAG" \
+  --source .. \
+  --token env:GITHUB_TOKEN \
+  --dry-run true
+'''
+
+[tasks.calculate-sha]
+description = "Calculate SHA256 for a script"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+TOOL="{{arg(name="tool")}}"
+SCRIPT=$(ls scripts/${TOOL}.* 2>/dev/null | head -1)
+if [ -z "$SCRIPT" ]; then
+  echo "❌ No script found for tool: $TOOL"
+  exit 1
+fi
+echo "📊 SHA256 for $SCRIPT:"
+shasum -a 256 "$SCRIPT"
+'''
+
+# Main deployment task
+[tasks.deploy]
+description = "Deploy a tool: create and push release tag (usage: mise run deploy tool-name 1.0.0)"
+depends = ['validate-tag']
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+TOOL="{{arg(name="tool")}}"
+VERSION="{{arg(name="version")}}"
+TAG="${TOOL}/v${VERSION}"
+
+# Validate script exists
+SCRIPT=$(ls scripts/${TOOL}.* 2>/dev/null | head -1)
+if [ -z "$SCRIPT" ]; then
+  echo "❌ No script found for tool: $TOOL in scripts/"
+  echo "Available tools:"
+  ls -1 scripts/ | sed 's/\\..*$//'
+  exit 1
+fi
+
+echo "🚀 Deploying $TOOL v$VERSION"
+echo "📝 Script: $SCRIPT"
+echo ""
+
+# Check if tag already exists
+if git rev-parse "$TAG" >/dev/null 2>&1; then
+  echo "❌ Tag $TAG already exists"
+  echo "To re-release, first delete the tag:"
+  echo "  git tag -d $TAG"
+  echo "  git push origin :refs/tags/$TAG"
+  exit 1
+fi
+
+# Ensure script is committed
+if ! git diff --quiet HEAD -- "$SCRIPT"; then
+  echo "⚠️  Warning: $SCRIPT has uncommitted changes"
+  read -p "Commit changes first? [y/N] " -n 1 -r
+  echo
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    git add "$SCRIPT"
+    git commit -m "Update $TOOL"
+    git push
+  else
+    echo "❌ Aborted. Commit your changes first."
+    exit 1
+  fi
+fi
+
+# Create and push tag
+echo "🏷️  Creating tag: $TAG"
+git tag "$TAG"
+
+echo "📤 Pushing tag to trigger CI..."
+git push origin "$TAG"
+
+echo ""
+echo "✅ Tag pushed successfully!"
+echo ""
+echo "📋 Next steps:"
+echo "  1. Watch the GitHub Actions workflow: https://github.com/$GITHUB_REPO/actions"
+echo "  2. Get the SHA256 from the workflow output"
+echo "  3. Update Formula/${TOOL}.rb with new version and SHA256"
+echo "  4. Commit and push the formula update"
+echo ""
+echo "Or run: mise run watch-release $TAG"
+'''
+
+[tasks.watch-release]
+description = "Watch the GitHub Actions run for a release tag"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+TAG="{{arg(name="tag")}}"
+echo "👀 Watching release workflow for tag: $TAG"
+echo "Opening GitHub Actions..."
+gh run watch --repo "$GITHUB_REPO" || true
+gh run list --repo "$GITHUB_REPO" --limit 1
+'''
+
+# Formula management tasks
+[tasks.update-formula]
+description = "Interactive helper to update a formula with new version/SHA256"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+TOOL="{{arg(name="tool")}}"
+VERSION="{{arg(name="version")}}"
+SHA256="{{arg(name="sha256")}}"
+
+FORMULA="Formula/${TOOL}.rb"
+
+if [ ! -f "$FORMULA" ]; then
+  echo "❌ Formula not found: $FORMULA"
+  exit 1
+fi
+
+echo "📝 Updating $FORMULA"
+echo "   Version: $VERSION"
+echo "   SHA256: $SHA256"
+
+# Backup original
+cp "$FORMULA" "${FORMULA}.bak"
+
+# Update version
+sed -i '' "s/version = \".*\"/version = \"$VERSION\"/" "$FORMULA"
+
+# Update SHA256
+sed -i '' "s/sha256 \".*\"/sha256 \"$SHA256\"/" "$FORMULA"
+
+echo "✅ Formula updated!"
+echo ""
+echo "Changes:"
+diff "${FORMULA}.bak" "$FORMULA" || true
+rm "${FORMULA}.bak"
+
+echo ""
+read -p "Commit and push changes? [y/N] " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+  git add "$FORMULA"
+  git commit -m "Update $TOOL formula to v$VERSION"
+  git push
+  echo "✅ Changes committed and pushed!"
+else
+  echo "ℹ️  Changes saved but not committed"
+fi
+'''
+
+# Convenience task for full release workflow
+[tasks.release]
+description = "Full release workflow: deploy + watch + prompt for formula update"
+depends = ['deploy']
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+TOOL="{{arg(name="tool")}}"
+VERSION="{{arg(name="version")}}"
+TAG="${TOOL}/v${VERSION}"
+
+echo ""
+echo "⏳ Waiting for GitHub Actions to complete..."
+sleep 5
+
+# Try to watch the run
+gh run watch --repo "$GITHUB_REPO" 2>/dev/null || {
+  echo "Could not watch run automatically."
+  echo "Check: https://github.com/$GITHUB_REPO/actions"
+}
+
+echo ""
+echo "To update the formula, get the SHA256 from the workflow output and run:"
+echo "  mise run update-formula $TOOL $VERSION <SHA256>"
+'''
+
+# CI/CD testing tasks
+[tasks.ci-test]
+description = "Test the Dagger module functions"
+dir = "ci"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+echo "Testing Dagger module..."
+dagger call parse-tag --tag "test-tool/v1.0.0"
+echo "✅ parse-tag works"
+dagger call find-script --source .. --tool-name "gh-pr2org"
+echo "✅ find-script works"
+'''
+
+# Development tasks
+[tasks.install-local]
+description = "Install the tap locally for testing"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+echo "Installing tap locally..."
+brew tap sam-phinizy/beer-hall "$(pwd)"
+echo "✅ Tap installed!"
+echo ""
+echo "Test with: brew install sam-phinizy/beer-hall/<tool-name>"
+'''
+
+[tasks.lint-formulas]
+description = "Lint all Homebrew formulas"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+echo "Linting formulas..."
+for formula in Formula/*.rb; do
+  echo "Checking $formula..."
+  brew audit --strict "$formula" || echo "⚠️  Issues found in $formula"
+done
+'''

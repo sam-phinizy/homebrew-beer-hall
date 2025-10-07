@@ -1,2 +1,6 @@
 # Claude Code configuration
 .claude/
+
+# mise local configuration
+.mise.local.toml
+.mise.*.toml
