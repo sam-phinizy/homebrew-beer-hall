@@ -65,7 +65,6 @@ shasum -a 256 "$SCRIPT"
 # Main deployment task
 [tasks.deploy]
 description = "Deploy a tool: create and push release tag (usage: mise run deploy tool-name 1.0.0)"
-depends = ['validate-tag']
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
@@ -73,6 +72,13 @@ set -euo pipefail
 TOOL="{{arg(name="tool")}}"
 VERSION="{{arg(name="version")}}"
 TAG="${TOOL}/v${VERSION}"
+
+# Validate tag format
+if [[ ! "$TAG" =~ ^[a-z0-9-]+/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "❌ Invalid tag format: $TAG"
+  echo "Expected format: tool-name/vX.Y.Z (e.g., gh-pr2org/v1.0.0)"
+  exit 1
+fi
 
 # Validate script exists
 SCRIPT=$(ls scripts/${TOOL}.* 2>/dev/null | head -1)
@@ -195,7 +201,6 @@ fi
 # Convenience task for full release workflow
 [tasks.release]
 description = "Full release workflow: deploy + watch + prompt for formula update"
-depends = ['deploy']
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
@@ -203,6 +208,10 @@ set -euo pipefail
 TOOL="{{arg(name="tool")}}"
 VERSION="{{arg(name="version")}}"
 TAG="${TOOL}/v${VERSION}"
+
+# First run deploy
+echo "🚀 Running deploy task..."
+mise run deploy "$TOOL" "$VERSION"
 
 echo ""
 echo "⏳ Waiting for GitHub Actions to complete..."
